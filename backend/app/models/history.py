@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, ForeignKey, Text, Boolean, DateTime
+from sqlalchemy import Column, String, ForeignKey, Text, Boolean, DateTime, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -17,3 +17,8 @@ class ReminderHistory(Base):
     email_status = Column(String(50), nullable=True)
 
     reminder = relationship("Reminder", back_populates="histories")
+
+    __table_args__ = (
+        Index("ix_reminder_history_reminder_id", "reminder_id"),
+        Index("ix_reminder_history_triggered_at", "triggered_at"),
+    )

@@ -1,20 +1,51 @@
+import logging
+from pathlib import Path
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from app.database import engine, Base
 from app.api import auth, categories, reminders, history
 from app.tasks.scheduler import start_scheduler, shutdown_scheduler
+from app.config import get_settings
+from app.logging_config import setup_logging
+
+WEB_DIR = Path(__file__).parent.parent / "web"
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="SmartReminder API", version="1.0.0")
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+    setup_logging(debug=settings.debug)
+    logging.getLogger(__name__).info("Starting SmartReminder API")
+    start_scheduler()
+    yield
+    shutdown_scheduler()
+
+
+app = FastAPI(title="SmartReminder API", version="1.0.0", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, lambda request, exc: JSONResponse(
+    status_code=429, content={"detail": "Rate limit exceeded"}
+))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(auth.router)
 app.include_router(categories.router)
@@ -22,11 +53,9 @@ app.include_router(reminders.router)
 app.include_router(history.router)
 
 
-@app.on_event("startup")
-def startup():
-    start_scheduler()
+@app.get("/")
+def serve_web():
+    return FileResponse(WEB_DIR / "index.html")
 
 
-@app.on_event("shutdown")
-def shutdown():
-    shutdown_scheduler()
+app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")

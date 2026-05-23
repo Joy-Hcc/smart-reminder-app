@@ -1,8 +1,10 @@
-import os
+import logging
+from datetime import datetime
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -13,7 +15,7 @@ def send_reminder_email(to_email: str, title: str, category: str, description: s
     sg = SendGridAPIClient(settings.sendgrid_api_key)
     content = f"""【智能提醒】{category} - {title}
 
-时间：{__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}
+时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}
 优先级：{priority}
 
 {description or ''}
@@ -29,6 +31,10 @@ def send_reminder_email(to_email: str, title: str, category: str, description: s
     )
     try:
         response = sg.send(message)
-        return response.status_code in (200, 202), f"status_{response.status_code}"
-    except Exception as e:
-        return False, str(e)
+        success = response.status_code in (200, 202)
+        if not success:
+            logger.warning("SendGrid returned status %d for %s", response.status_code, to_email)
+        return success, f"status_{response.status_code}"
+    except Exception:
+        logger.error("Failed to send email to %s", to_email, exc_info=True)
+        return False, "Email delivery failed"

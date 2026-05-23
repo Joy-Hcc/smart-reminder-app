@@ -5,6 +5,7 @@ from typing import Optional
 
 class UserCreate(BaseModel):
     device_id: str
+    email: Optional[str] = None
     api_key: Optional[str] = None
     api_provider: Optional[str] = None
 
@@ -12,6 +13,7 @@ class UserCreate(BaseModel):
 class UserOut(BaseModel):
     id: str
     device_id: str
+    email: Optional[str] = None
     api_provider: Optional[str] = None
     created_at: datetime
 

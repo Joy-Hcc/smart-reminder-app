@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, ForeignKey, Text, Integer, DateTime
+from sqlalchemy import Column, String, ForeignKey, Text, Integer, DateTime, JSON, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -15,7 +15,7 @@ class Reminder(Base):
     description = Column(Text, nullable=True)
     priority = Column(String(20), default="medium")
     trigger_type = Column(String(50), nullable=False)
-    trigger_config = Column(Text, nullable=False, default="{}")
+    trigger_config = Column(JSON, nullable=False, default=dict)
     advance_notice = Column(Integer, default=0)
     repeat_rule = Column(String(50), nullable=True)
     status = Column(String(20), default="active")
@@ -27,6 +27,12 @@ class Reminder(Base):
     event_trigger = relationship("EventTrigger", back_populates="reminder", uselist=False, cascade="all, delete-orphan")
     histories = relationship("ReminderHistory", back_populates="reminder", cascade="all, delete-orphan")
 
+    __table_args__ = (
+        Index("ix_reminders_user_id", "user_id"),
+        Index("ix_reminders_status", "status"),
+        Index("ix_reminders_user_status", "user_id", "status"),
+    )
+
 
 class EventTrigger(Base):
     __tablename__ = "event_triggers"
@@ -34,7 +40,7 @@ class EventTrigger(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     reminder_id = Column(String(36), ForeignKey("reminders.id"), nullable=False, unique=True)
     event_type = Column(String(50), nullable=False)
-    config = Column(Text, nullable=False, default="{}")
+    config = Column(JSON, nullable=False, default=dict)
     last_checked = Column(DateTime(timezone=True), nullable=True)
     last_triggered = Column(DateTime(timezone=True), nullable=True)
 

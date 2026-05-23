@@ -1,18 +1,11 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.category import Category
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryOut
-from app.services import auth_service
+from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
-
-
-def get_current_user(x_device_id: str = Header(...), db: Session = Depends(get_db)):
-    user = auth_service.get_user_by_device(db, x_device_id)
-    if not user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    return user
 
 
 @router.get("", response_model=list[CategoryOut])
@@ -47,6 +40,9 @@ def delete_category(cat_id: str, user=Depends(get_current_user), db: Session = D
     cat = db.query(Category).filter(Category.id == cat_id, Category.user_id == user.id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
+    # Unlink reminders before deleting category
+    from app.models.reminder import Reminder
+    db.query(Reminder).filter(Reminder.category_id == cat_id).update({Reminder.category_id: None})
     db.delete(cat)
     db.commit()
     return {"ok": True}

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/reminder.dart';
 import '../providers/reminder_provider.dart';
+import '../screens/reminder_form_screen.dart';
 
 class ReminderCard extends ConsumerWidget {
   final Reminder reminder;
@@ -16,8 +17,23 @@ class ReminderCard extends ConsumerWidget {
     };
   }
 
+  Future<bool> _confirmDelete(BuildContext context) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认删除'),
+        content: Text('确定要删除「${reminder.title}」吗？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('删除', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    ) ?? false;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final pc = _priorityColor(reminder.priority);
     final dt = reminder.triggerType == 'scheduled'
         ? DateTime.tryParse(reminder.triggerConfig['datetime'] ?? '')
         : null;
@@ -26,8 +42,8 @@ class ReminderCard extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: _priorityColor(reminder.priority).withAlpha(40),
-          child: Icon(Icons.alarm, color: _priorityColor(reminder.priority)),
+          backgroundColor: pc.withAlpha(40),
+          child: Icon(Icons.alarm, color: pc),
         ),
         title: Text(reminder.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Column(
@@ -41,16 +57,24 @@ class ReminderCard extends ConsumerWidget {
         ),
         trailing: PopupMenuButton<String>(
           onSelected: (v) async {
+            if (v == 'edit') {
+              Navigator.push(context, MaterialPageRoute(
+                builder: (_) => ReminderFormScreen(reminder: reminder),
+              ));
+            }
             if (v == 'pause') await ref.read(reminderProvider.notifier).pause(reminder.id);
             if (v == 'resume') await ref.read(reminderProvider.notifier).resume(reminder.id);
-            if (v == 'delete') await ref.read(reminderProvider.notifier).delete(reminder.id);
+            if (v == 'delete' && await _confirmDelete(context)) {
+              await ref.read(reminderProvider.notifier).delete(reminder.id);
+            }
           },
           itemBuilder: (_) => [
+            const PopupMenuItem(value: 'edit', child: Text('编辑')),
             if (reminder.status == 'active')
               const PopupMenuItem(value: 'pause', child: Text('暂停')),
             if (reminder.status == 'paused')
               const PopupMenuItem(value: 'resume', child: Text('恢复')),
-            const PopupMenuItem(value: 'delete', child: Text('删除')),
+            const PopupMenuItem(value: 'delete', child: Text('删除', style: TextStyle(color: Colors.red))),
           ],
         ),
       ),

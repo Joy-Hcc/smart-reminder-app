@@ -18,27 +18,55 @@ class ReminderNotifier extends StateNotifier<AsyncValue<List<Reminder>>> {
   }
 
   Future<void> add(Reminder r) async {
-    final created = await ApiService().createReminder(r);
-    state = AsyncValue.data([created, ...state.value ?? []]);
+    try {
+      final created = await ApiService().createReminder(r);
+      state = AsyncValue.data([created, ...state.value ?? []]);
+    } catch (e) {
+      rethrow;
+    }
   }
 
   Future<void> update(String id, Reminder r) async {
-    final updated = await ApiService().updateReminder(id, r);
-    state = AsyncValue.data((state.value ?? []).map((x) => x.id == id ? updated : x).toList());
+    try {
+      final updated = await ApiService().updateReminder(id, r);
+      state = AsyncValue.data((state.value ?? []).map((x) => x.id == id ? updated : x).toList());
+    } catch (e) {
+      rethrow;
+    }
   }
 
   Future<void> delete(String id) async {
-    await ApiService().deleteReminder(id);
-    state = AsyncValue.data((state.value ?? []).where((x) => x.id != id).toList());
+    try {
+      await ApiService().deleteReminder(id);
+      state = AsyncValue.data((state.value ?? []).where((x) => x.id != id).toList());
+    } catch (e) {
+      rethrow;
+    }
   }
 
   Future<void> pause(String id) async {
-    await ApiService().pauseReminder(id);
-    await load();
+    try {
+      await ApiService().pauseReminder(id);
+      state = AsyncValue.data((state.value ?? []).map((x) => x.id == id ? Reminder(
+        id: x.id, title: x.title, description: x.description, priority: x.priority,
+        triggerType: x.triggerType, triggerConfig: x.triggerConfig, advanceNotice: x.advanceNotice,
+        repeatRule: x.repeatRule, status: 'paused', createdAt: x.createdAt, categoryId: x.categoryId,
+      ) : x).toList());
+    } catch (e) {
+      await load();
+    }
   }
 
   Future<void> resume(String id) async {
-    await ApiService().resumeReminder(id);
-    await load();
+    try {
+      await ApiService().resumeReminder(id);
+      state = AsyncValue.data((state.value ?? []).map((x) => x.id == id ? Reminder(
+        id: x.id, title: x.title, description: x.description, priority: x.priority,
+        triggerType: x.triggerType, triggerConfig: x.triggerConfig, advanceNotice: x.advanceNotice,
+        repeatRule: x.repeatRule, status: 'active', createdAt: x.createdAt, categoryId: x.categoryId,
+      ) : x).toList());
+    } catch (e) {
+      await load();
+    }
   }
 }

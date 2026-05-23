@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>智能提醒</title>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-light: #e0e7ff;
+      --danger: #ef4444;
+      --success: #22c55e;
+      --warn: #f59e0b;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+      --text2: #64748b;
+      --border: #e2e8f0;
+      --radius: 12px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      max-width: 480px; margin: 0 auto; min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--primary); color: #fff;
+      padding: 16px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .header h1 { font-size: 18px; font-weight: 600; }
+    .header-btn { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 4px 8px; }
+
+    /* Bottom nav */
+    .nav {
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 100%; max-width: 480px; background: var(--card);
+      border-top: 1px solid var(--border);
+      display: flex; z-index: 10;
+    }
+    .nav-item {
+      flex: 1; padding: 10px 0; text-align: center; cursor: pointer;
+      color: var(--text2); font-size: 12px; transition: color .2s;
+      -webkit-tap-highlight-color: transparent; user-select: none;
+    }
+    .nav-item.active { color: var(--primary); }
+    .nav-item:active { background: #f1f5f9; }
+    .nav-item .icon { font-size: 22px; display: block; }
+
+    /* Pages */
+    .page { display: none; padding: 16px; padding-bottom: 80px; }
+    .page.active { display: block; }
+
+    /* Cards */
+    .card {
+      background: var(--card); border-radius: var(--radius);
+      padding: 16px; margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+
+    /* Reminder item */
+    .reminder-item {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--card); border-radius: var(--radius);
+      padding: 14px 16px; margin-bottom: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      cursor: pointer; transition: transform .15s;
+      -webkit-tap-highlight-color: transparent; user-select: none;
+    }
+    .reminder-item:active { transform: scale(.98); background: #f1f5f9; }
+    .priority-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .priority-high { background: var(--danger); }
+    .priority-medium { background: var(--warn); }
+    .priority-low { background: var(--success); }
+    .reminder-info { flex: 1; min-width: 0; }
+    .reminder-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .reminder-meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+    .reminder-status {
+      font-size: 11px; padding: 2px 8px; border-radius: 10px;
+      background: var(--primary-light); color: var(--primary); flex-shrink: 0;
+    }
+    .reminder-status.paused { background: #fef3c7; color: #92400e; }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 12px 20px; border-radius: 8px; border: none;
+      font-size: 14px; font-weight: 500; cursor: pointer; transition: .2s;
+      -webkit-tap-highlight-color: transparent; user-select: none;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-block { width: 100%; }
+    .btn-sm { padding: 8px 14px; font-size: 13px; }
+
+    /* FAB */
+    .fab {
+      position: fixed; bottom: 80px; right: calc(50% - 220px);
+      width: 56px; height: 56px; border-radius: 50%;
+      background: var(--primary); color: #fff; border: none;
+      font-size: 28px; cursor: pointer;
+      box-shadow: 0 4px 12px rgba(79,70,229,.4);
+      z-index: 5; transition: transform .2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fab:active { transform: scale(.9); }
+
+    /* Form */
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text2); }
+    input, select, textarea {
+      width: 100%; padding: 12px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 16px; outline: none; transition: border .2s;
+      font-family: inherit; background: #fff;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+    textarea { resize: vertical; min-height: 80px; }
+    select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+
+    /* Segment */
+    .segment { display: flex; gap: 8px; }
+    .segment-btn {
+      flex: 1; padding: 12px 8px; border: 2px solid var(--border);
+      border-radius: 8px; background: #fff; cursor: pointer;
+      text-align: center; font-size: 14px; font-weight: 500;
+      transition: all .15s; user-select: none; -webkit-tap-highlight-color: transparent;
+    }
+    .segment-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .segment-btn:active { transform: scale(.95); }
+
+    /* Category item */
+    .cat-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: var(--card);
+      border-radius: var(--radius); margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .cat-children { padding-left: 24px; }
+
+    /* Pagination */
+    .pagination {
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      padding: 16px 0;
+    }
+    .page-info { font-size: 13px; color: var(--text2); }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 48px 16px; color: var(--text2); }
+    .empty .icon { font-size: 48px; margin-bottom: 12px; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.4);
+      z-index: 20; display: none; align-items: flex-end; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--card); border-radius: 16px 16px 0 0;
+      width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto;
+      padding: 24px 16px;
+      animation: slideUp .25s ease;
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal h2 { font-size: 18px; margin-bottom: 20px; }
+
+    /* Toast */
+    .toast {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: #1e293b; color: #fff; padding: 10px 20px;
+      border-radius: 8px; font-size: 13px; z-index: 30;
+      opacity: 0; transition: opacity .3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 32px; color: var(--text2); }
+    .spinner {
+      display: inline-block; width: 24px; height: 24px;
+      border: 3px solid var(--border); border-top-color: var(--primary);
+      border-radius: 50%; animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Actions row */
+    .actions { display: flex; gap: 8px; margin-top: 12px; }
+    .actions .btn { flex: 1; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1 id="pageTitle">智能提醒</h1>
+    <div>
+      <button class="header-btn" onclick="showSearch()" id="searchBtn">&#128269;</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Search bar -->
+  <div id="searchBar" style="display:none; padding: 8px 16px; background: #fff; border-bottom: 1px solid var(--border);">
+    <input type="text" id="searchInput" placeholder="搜索提醒..." oninput="onSearch(this.value)" style="width:100%;">
+  </div>
+
+  <!-- Page: Home -->
+  <div class="page active" id="pageHome">
+    <div id="reminderList"></div>
+    <div class="pagination" id="pagination" style="display:none;">
+      <button class="btn btn-outline btn-sm" onclick="changePage(-1)">上一页</button>
+      <span class="page-info" id="pageInfo"></span>
+      <button class="btn btn-outline btn-sm" onclick="changePage(1)">下一页</button>
+    </div>
+  </div>
+
+  <!-- Page: Categories -->
+  <div class="page" id="pageCategories">
+    <div id="categoryList"></div>
+    <div style="padding: 16px 0;">
+      <button class="btn btn-outline btn-block" onclick="showAddCategory()">+ 新建分类</button>
+    </div>
+  </div>
+
+  <!-- Page: History -->
+  <div class="page" id="pageHistory">
+    <div id="historyList"></div>
+    <div class="pagination" id="historyPagination" style="display:none;">
+      <button class="btn btn-outline btn-sm" onclick="changeHistoryPage(-1)">上一页</button>
+      <span class="page-info" id="historyPageInfo"></span>
+      <button class="btn btn-outline btn-sm" onclick="changeHistoryPage(1)">下一页</button>
+    </div>
+  </div>
+
+  <!-- Page: Settings -->
+  <div class="page" id="pageSettings">
+    <div class="card">
+      <h3 style="margin-bottom:16px;">设置</h3>
+      <div class="form-group">
+        <label>服务器地址（自动检测）</label>
+        <input type="text" id="setServerUrl" readonly style="background:#f1f5f9; color:var(--text2);">
+      </div>
+      <div class="form-group">
+        <label>邮箱（接收提醒通知）</label>
+        <input type="email" id="setEmail" placeholder="your@email.com">
+      </div>
+      <div class="form-group">
+        <label>AI 厂商</label>
+        <select id="setProvider">
+          <option>DeepSeek</option><option>OpenAI</option><option>Claude</option>
+          <option>通义千问</option><option>文心一言</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>DeepSeek API KEY</label>
+        <input type="password" id="setApiKey" placeholder="sk-...">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="saveAllSettings()">保存设置</button>
+      <p style="font-size:12px; color:var(--text2); margin-top:12px; text-align:center;">
+        服务器地址会自动从浏览器地址栏获取，无需手动输入
+      </p>
+    </div>
+    <div class="card" style="margin-top:12px;">
+      <p style="font-size:13px; color:var(--text2);">设备 ID: <span id="deviceIdDisplay"></span></p>
+    </div>
+  </div>
+
+  <!-- FAB -->
+  <button class="fab" id="fab" onclick="showCreateReminder()">+</button>
+
+  <!-- Bottom nav -->
+  <div class="nav">
+    <div class="nav-item active" data-page="Home" onclick="switchPage('Home')">
+      <span class="icon">&#128197;</span>提醒
+    </div>
+    <div class="nav-item" data-page="Categories" onclick="switchPage('Categories')">
+      <span class="icon">&#128193;</span>分类
+    </div>
+    <div class="nav-item" data-page="History" onclick="switchPage('History')">
+      <span class="icon">&#128336;</span>历史
+    </div>
+    <div class="nav-item" data-page="Settings" onclick="switchPage('Settings')">
+      <span class="icon">&#9881;</span>设置
+    </div>
+  </div>
+
+  <!-- Modal: Create/Edit Reminder -->
+  <div class="modal-overlay" id="reminderModal" onclick="if(event.target===this) closeModal('reminderModal')">
+    <div class="modal">
+      <h2 id="modalTitle">新建提醒</h2>
+      <div class="form-group">
+        <label>标题</label>
+        <input type="text" id="rmTitle" placeholder="提醒内容">
+      </div>
+      <div class="form-group">
+        <label>描述（可选）</label>
+        <textarea id="rmDesc" placeholder="详细描述..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>分类</label>
+        <select id="rmCategory"><option value="">无分类</option></select>
+      </div>
+      <div class="form-group">
+        <label>优先级</label>
+        <div class="segment" id="rmPriority">
+          <div class="segment-btn" data-val="high">高</div>
+          <div class="segment-btn active" data-val="medium">中</div>
+          <div class="segment-btn" data-val="low">低</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>触发方式</label>
+        <div class="segment" id="rmTriggerType">
+          <div class="segment-btn active" data-val="scheduled">定时</div>
+          <div class="segment-btn" data-val="event">事件</div>
+        </div>
+      </div>
+      <div class="form-group" id="rmTimeGroup">
+        <label>提醒时间</label>
+        <input type="datetime-local" id="rmTime">
+      </div>
+      <div class="form-group" id="rmEventGroup" style="display:none;">
+        <label>城市代码（和风天气）</label>
+        <input type="text" id="rmCity" placeholder="如 101010100（北京）">
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <select id="rmCondType" style="flex:1;">
+            <option value="temperature">温度</option><option value="humidity">湿度</option>
+            <option value="wind_speed">风速</option>
+          </select>
+          <select id="rmCondOp" style="width:60px;">
+            <option value=">">&gt;</option><option value=">=">&ge;</option>
+            <option value="<">&lt;</option><option value="<=">&le;</option>
+            <option value="==">=</option>
+          </select>
+          <input type="number" id="rmCondValue" placeholder="值" style="flex:1;">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>提前提醒（分钟）</label>
+        <input type="number" id="rmAdvance" value="0" min="0">
+      </div>
+      <div class="actions">
+        <button class="btn btn-outline" onclick="closeModal('reminderModal')">取消</button>
+        <button class="btn btn-primary" onclick="saveReminder()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Category -->
+  <div class="modal-overlay" id="categoryModal" onclick="if(event.target===this) closeModal('categoryModal')">
+    <div class="modal">
+      <h2>新建分类</h2>
+      <div class="form-group">
+        <label>分类名称</label>
+        <input type="text" id="catName" placeholder="如：工作、生活">
+      </div>
+      <div class="form-group">
+        <label>父分类（可选）</label>
+        <select id="catParent"><option value="">顶级分类</option></select>
+      </div>
+      <div class="actions">
+        <button class="btn btn-outline" onclick="closeModal('categoryModal')">取消</button>
+        <button class="btn btn-primary" onclick="saveCategory()">保存</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ========== State ==========
+let deviceId = localStorage.getItem('deviceId');
+const baseUrl = window.location.origin;
+let currentPage = 1, totalPages = 1;
+let historyPage = 1, historyTotalPages = 1;
+let searchQuery = '';
+let editingReminderId = null;
+let categories = [];
+
+// ========== Init ==========
+(function init() {
+  if (!deviceId) {
+    try { deviceId = crypto.randomUUID(); } catch {
+      deviceId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+      });
+    }
+    localStorage.setItem('deviceId', deviceId);
+  }
+  document.getElementById('deviceIdDisplay').textContent = deviceId.substring(0, 8) + '...';
+  document.getElementById('setServerUrl').value = baseUrl;
+
+  // Segment buttons - use event delegation for better mobile support
+  document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.segment-btn');
+    if (!btn) return;
+    const seg = btn.parentElement;
+    if (!seg || !seg.classList.contains('segment')) return;
+
+    seg.querySelectorAll('.segment-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+
+    if (seg.id === 'rmTriggerType') {
+      var val = btn.getAttribute('data-val');
+      document.getElementById('rmTimeGroup').style.display = val === 'scheduled' ? '' : 'none';
+      document.getElementById('rmEventGroup').style.display = val === 'event' ? '' : 'none';
+    }
+  });
+
+  if (baseUrl) {
+    (async () => {
+      const ok = await verifyAuth();
+      if (ok) {
+        loadReminders();
+        loadCategories();
+      }
+    })();
+  }
+})();
+
+// ========== API ==========
+async function api(path, opts = {}) {
+  if (!baseUrl) { toast('请先在设置中配置服务器地址'); return null; }
+  const url = baseUrl.replace(/\/$/, '') + path;
+  const headers = { 'x-device-id': deviceId, ...opts.headers };
+  if (opts.body) headers['Content-Type'] = 'application/json';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(function() { controller.abort(); }, 15000);
+  try {
+    const res = await fetch(url, { ...opts, headers, signal: controller.signal });
+    if (!res.ok) {
+      const err = await res.json().catch(function() { return {}; });
+      throw new Error(err.detail || 'HTTP ' + res.status);
+    }
+    return res.status === 204 ? null : await res.json();
+  } catch (e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') toast('请求超时，请检查网络');
+    else if (e.message === 'Failed to fetch') toast('无法连接服务器');
+    else toast(e.message);
+    throw e;
+  }
+  clearTimeout(timeoutId);
+}
+
+async function verifyAuth() {
+  try {
+    const user = await api('/api/auth/verify', {
+      method: 'POST',
+      body: JSON.stringify({ device_id: deviceId }),
+    });
+    if (user) {
+      document.getElementById('setEmail').value = user.email || '';
+      document.getElementById('setProvider').value = user.api_provider || 'DeepSeek';
+    }
+    return true;
+  } catch {
+    toast('设备验证失败，请检查服务器地址');
+    return false;
+  }
+}
+
+// ========== Reminders ==========
+async function loadReminders(page = 1) {
+  currentPage = page;
+  const list = document.getElementById('reminderList');
+  list.innerHTML = '<div class="loading"><div class="spinner"></div><p>加载中...</p></div>';
+
+  try {
+    const params = new URLSearchParams({ page, page_size: 20 });
+    if (searchQuery) params.set('search', searchQuery);
+    const data = await api(`/api/reminders?${params}`);
+    if (!data) return;
+
+    totalPages = data.pages || 1;
+    const items = data.items || [];
+
+    if (items.length === 0) {
+      list.innerHTML = '<div class="empty"><div class="icon">&#128197;</div><p>还没有提醒</p><p style="font-size:13px; margin-top:8px;">点击右下角 + 按钮创建第一个提醒</p></div>';
+    } else {
+      list.innerHTML = items.map(r => `
+        <div class="reminder-item" onclick="editReminder('${r.id}')">
+          <div class="priority-dot priority-${r.priority}"></div>
+          <div class="reminder-info">
+            <div class="reminder-title">${esc(r.title)}</div>
+            <div class="reminder-meta">${formatTime(r)}</div>
+          </div>
+          <span class="reminder-status ${r.status}">${statusText(r.status)}</span>
+        </div>
+      `).join('');
+    }
+
+    const pg = document.getElementById('pagination');
+    pg.style.display = totalPages > 1 ? '' : 'none';
+    document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`;
+  } catch {
+    list.innerHTML = '<div class="empty"><p>加载失败</p></div>';
+  }
+}
+
+function changePage(delta) {
+  const next = currentPage + delta;
+  if (next >= 1 && next <= totalPages) loadReminders(next);
+}
+
+function formatTime(r) {
+  if (r.trigger_type === 'scheduled' && r.trigger_config?.datetime) {
+    return new Date(r.trigger_config.datetime).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+  }
+  if (r.trigger_type === 'event') {
+    const c = r.trigger_config || {};
+    return `事件: ${c.condition_type || ''} ${c.condition_op || ''} ${c.condition_value || ''}`;
+  }
+  return r.trigger_type;
+}
+
+function statusText(s) {
+  return { active: '进行中', paused: '已暂停', triggered: '已触发' }[s] || s;
+}
+
+function onSearch(val) {
+  searchQuery = val;
+  clearTimeout(window._searchTimer);
+  window._searchTimer = setTimeout(() => loadReminders(1), 300);
+}
+
+function showSearch() {
+  const bar = document.getElementById('searchBar');
+  bar.style.display = bar.style.display === 'none' ? '' : 'none';
+  if (bar.style.display === 'none') {
+    document.getElementById('searchInput').value = '';
+    searchQuery = '';
+    loadReminders(1);
+  }
+}
+
+// ========== Create/Edit Reminder ==========
+async function showCreateReminder() {
+  editingReminderId = null;
+  document.getElementById('modalTitle').textContent = '新建提醒';
+  document.getElementById('rmTitle').value = '';
+  document.getElementById('rmDesc').value = '';
+  document.getElementById('rmTime').value = '';
+  document.getElementById('rmCity').value = '';
+  document.getElementById('rmCondValue').value = '';
+  document.getElementById('rmAdvance').value = '0';
+  setActiveSegment('rmPriority', 'medium');
+  setActiveSegment('rmTriggerType', 'scheduled');
+  document.getElementById('rmTimeGroup').style.display = '';
+  document.getElementById('rmEventGroup').style.display = 'none';
+  document.querySelector('#reminderModal .actions').innerHTML =
+    '<button class="btn btn-outline" onclick="closeModal(\'reminderModal\')">取消</button>' +
+    '<button class="btn btn-primary" onclick="saveReminder()">保存</button>';
+  await loadCategoryOptions();
+  openModal('reminderModal');
+}
+
+async function editReminder(id) {
+  try {
+    const r = await api(`/api/reminders/${id}`);
+    if (!r) return;
+    editingReminderId = id;
+    document.getElementById('modalTitle').textContent = '编辑提醒';
+    document.getElementById('rmTitle').value = r.title;
+    document.getElementById('rmDesc').value = r.description || '';
+    document.getElementById('rmAdvance').value = r.advance_notice || 0;
+    setActiveSegment('rmPriority', r.priority);
+    setActiveSegment('rmTriggerType', r.trigger_type);
+
+    if (r.trigger_type === 'scheduled') {
+      document.getElementById('rmTimeGroup').style.display = '';
+      document.getElementById('rmEventGroup').style.display = 'none';
+      if (r.trigger_config?.datetime) {
+        document.getElementById('rmTime').value = r.trigger_config.datetime.substring(0, 16);
+      }
+    } else {
+      document.getElementById('rmTimeGroup').style.display = 'none';
+      document.getElementById('rmEventGroup').style.display = '';
+      const c = r.trigger_config || {};
+      document.getElementById('rmCity').value = c.city || '';
+      document.getElementById('rmCondType').value = c.condition_type || 'temperature';
+      document.getElementById('rmCondOp').value = c.condition_op || '>';
+      document.getElementById('rmCondValue').value = c.condition_value ?? '';
+    }
+
+    await loadCategoryOptions();
+    document.getElementById('rmCategory').value = r.category_id || '';
+
+    // Add delete/pause buttons for edit mode
+    let actionsHtml = `
+      <button class="btn btn-outline" onclick="closeModal('reminderModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveReminder()">保存</button>
+    `;
+    if (r.status === 'active') {
+      actionsHtml = `<button class="btn btn-danger" onclick="deleteReminder('${id}')">删除</button>
+        <button class="btn btn-outline" onclick="pauseReminder('${id}')">暂停</button>` + actionsHtml;
+    } else if (r.status === 'paused') {
+      actionsHtml = `<button class="btn btn-danger" onclick="deleteReminder('${id}')">删除</button>
+        <button class="btn btn-outline" onclick="resumeReminder('${id}')">恢复</button>` + actionsHtml;
+    }
+    document.querySelector('#reminderModal .actions').innerHTML = actionsHtml;
+
+    openModal('reminderModal');
+  } catch (e) { console.error(e); }
+}
+
+async function saveReminder() {
+  const title = document.getElementById('rmTitle').value.trim();
+  if (!title) { toast('请输入标题'); return; }
+
+  const triggerType = getActiveSegment('rmTriggerType');
+  let triggerConfig = {};
+
+  if (triggerType === 'scheduled') {
+    const time = document.getElementById('rmTime').value;
+    if (!time) { toast('请选择时间'); return; }
+    triggerConfig = { datetime: new Date(time).toISOString() };
+  } else {
+    const city = document.getElementById('rmCity').value.trim();
+    const condValue = parseFloat(document.getElementById('rmCondValue').value);
+    if (!city || isNaN(condValue)) { toast('请填写事件条件'); return; }
+    triggerConfig = {
+      city,
+      condition_type: document.getElementById('rmCondType').value,
+      condition_op: document.getElementById('rmCondOp').value,
+      condition_value: condValue,
+    };
+  }
+
+  const body = {
+    title,
+    description: document.getElementById('rmDesc').value.trim() || null,
+    category_id: document.getElementById('rmCategory').value || null,
+    priority: getActiveSegment('rmPriority'),
+    trigger_type: triggerType,
+    trigger_config: triggerConfig,
+    advance_notice: parseInt(document.getElementById('rmAdvance').value) || 0,
+  };
+
+  try {
+    if (editingReminderId) {
+      await api(`/api/reminders/${editingReminderId}`, { method: 'PUT', body: JSON.stringify(body) });
+      toast('已更新');
+    } else {
+      await api('/api/reminders', { method: 'POST', body: JSON.stringify(body) });
+      toast('已创建');
+    }
+    closeModal('reminderModal');
+    loadReminders(currentPage);
+  } catch (e) { console.error(e); }
+}
+
+async function deleteReminder(id) {
+  if (!confirm('确定删除？')) return;
+  try {
+    await api(`/api/reminders/${id}`, { method: 'DELETE' });
+    toast('已删除');
+    closeModal('reminderModal');
+    loadReminders(currentPage);
+  } catch (e) { console.error(e); }
+}
+
+async function pauseReminder(id) {
+  try {
+    await api(`/api/reminders/${id}/pause`, { method: 'POST' });
+    toast('已暂停');
+    closeModal('reminderModal');
+    loadReminders(currentPage);
+  } catch (e) { console.error(e); }
+}
+
+async function resumeReminder(id) {
+  try {
+    await api(`/api/reminders/${id}/resume`, { method: 'POST' });
+    toast('已恢复');
+    closeModal('reminderModal');
+    loadReminders(currentPage);
+  } catch (e) { console.error(e); }
+}
+
+// ========== Categories ==========
+async function loadCategories() {
+  try {
+    categories = await api('/api/categories') || [];
+    renderCategories();
+  } catch (e) { console.error(e); }
+}
+
+function renderCategories() {
+  const list = document.getElementById('categoryList');
+  if (categories.length === 0) {
+    list.innerHTML = '<div class="empty"><div class="icon">&#128193;</div><p>还没有分类</p><p style="font-size:13px; margin-top:8px;">点击下方按钮创建第一个分类</p></div>';
+    return;
+  }
+  list.innerHTML = categories.map(c => `
+    <div>
+      <div class="cat-item">
+        <span>${esc(c.name)}</span>
+        <div>
+          <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); deleteCategory('${c.id}')" style="color:var(--danger); border-color:var(--danger);">删除</button>
+        </div>
+      </div>
+      ${(c.children || []).length > 0 ? '<div class="cat-children">' + c.children.map(ch => `
+        <div class="cat-item">
+          <span>${esc(ch.name)}</span>
+          <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); deleteCategory('${ch.id}')" style="color:var(--danger); border-color:var(--danger);">删除</button>
+        </div>
+      `).join('') + '</div>' : ''}
+    </div>
+  `).join('');
+}
+
+async function loadCategoryOptions() {
+  if (categories.length === 0) await loadCategories();
+  const sel = document.getElementById('rmCategory');
+  sel.innerHTML = '<option value="">无分类</option>' +
+    categories.flatMap(c => [c, ...(c.children || [])])
+      .map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+
+  const parentSel = document.getElementById('catParent');
+  parentSel.innerHTML = '<option value="">顶级分类</option>' +
+    categories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+}
+
+function showAddCategory() {
+  document.getElementById('catName').value = '';
+  loadCategoryOptions();
+  openModal('categoryModal');
+}
+
+async function saveCategory() {
+  const name = document.getElementById('catName').value.trim();
+  if (!name) { toast('请输入分类名称'); return; }
+  try {
+    await api('/api/categories', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        parent_id: document.getElementById('catParent').value || null,
+      }),
+    });
+    toast('已创建');
+    closeModal('categoryModal');
+    loadCategories();
+  } catch (e) { console.error(e); }
+}
+
+async function deleteCategory(id) {
+  if (!confirm('确定删除此分类？')) return;
+  try {
+    await api(`/api/categories/${id}`, { method: 'DELETE' });
+    toast('已删除');
+    loadCategories();
+  } catch (e) { console.error(e); }
+}
+
+// ========== History ==========
+async function loadHistory(page = 1) {
+  historyPage = page;
+  const list = document.getElementById('historyList');
+  list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  try {
+    const data = await api(`/api/history?page=${page}&page_size=20`);
+    if (!data) return;
+
+    historyTotalPages = data.pages || 1;
+    const items = data.items || [];
+
+    if (items.length === 0) {
+      list.innerHTML = '<div class="empty"><div class="icon">&#128336;</div><p>暂无触发记录</p><p style="font-size:13px; margin-top:8px;">提醒触发后会在这里显示</p></div>';
+    } else {
+      list.innerHTML = items.map(h => `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:500;">${esc(h.trigger_type || '提醒')}</span>
+            <span style="font-size:12px; color:${h.email_sent ? 'var(--success)' : 'var(--text2)'};">
+              ${h.email_sent ? '&#10003; 已发送' : '&#10007; 未发送'}
+            </span>
+          </div>
+          <div style="font-size:12px; color:var(--text2); margin-top:4px;">
+            ${new Date(h.triggered_at).toLocaleString('zh-CN')}
+          </div>
+          ${h.content ? `<div style="font-size:13px; margin-top:6px; color:var(--text2);">${esc(h.content)}</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    const pg = document.getElementById('historyPagination');
+    pg.style.display = historyTotalPages > 1 ? '' : 'none';
+    document.getElementById('historyPageInfo').textContent = `${historyPage} / ${historyTotalPages}`;
+  } catch {
+    list.innerHTML = '<div class="empty"><p>加载失败</p></div>';
+  }
+}
+
+function changeHistoryPage(delta) {
+  const next = historyPage + delta;
+  if (next >= 1 && next <= historyTotalPages) loadHistory(next);
+}
+
+// ========== Settings ==========
+async function saveAllSettings() {
+  const email = document.getElementById('setEmail').value.trim();
+  const provider = document.getElementById('setProvider').value;
+  const apiKey = document.getElementById('setApiKey').value.trim();
+
+  try {
+    await api('/api/auth/verify', {
+      method: 'POST',
+      body: JSON.stringify({
+        device_id: deviceId,
+        email: email || null,
+        api_key: apiKey || undefined,
+        api_provider: provider,
+      }),
+    });
+    toast('保存成功');
+    loadReminders();
+    loadCategories();
+  } catch {
+    // api() already shows specific error toast
+  }
+}
+
+// ========== Nav ==========
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelector(`.nav-item[data-page="${name}"]`).classList.add('active');
+
+  document.getElementById('pageTitle').textContent = {
+    Home: '智能提醒', Categories: '分类管理', History: '历史记录', Settings: '设置'
+  }[name];
+
+  document.getElementById('fab').style.display = name === 'Home' ? '' : 'none';
+  document.getElementById('searchBtn').style.display = name === 'Home' ? '' : 'none';
+
+  if (name === 'History') loadHistory();
+  if (name === 'Categories') loadCategories();
+}
+
+// ========== Helpers ==========
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function setActiveSegment(segId, val) {
+  var seg = document.getElementById(segId);
+  seg.querySelectorAll('.segment-btn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-val') === val);
+  });
+  if (segId === 'rmTriggerType') {
+    document.getElementById('rmTimeGroup').style.display = val === 'scheduled' ? '' : 'none';
+    document.getElementById('rmEventGroup').style.display = val === 'event' ? '' : 'none';
+  }
+}
+function getActiveSegment(segId) {
+  var el = document.getElementById(segId).querySelector('.segment-btn.active');
+  return el ? el.getAttribute('data-val') : null;
+}
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._toast);
+  window._toast = setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>

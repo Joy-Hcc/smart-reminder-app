@@ -1,9 +1,11 @@
-import json
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.models.reminder import Reminder, EventTrigger
 from app.models.history import ReminderHistory
 from app.schemas.reminder import ReminderCreate, ReminderUpdate
+
+logger = logging.getLogger(__name__)
 
 
 def create_reminder(db: Session, user_id: str, data: ReminderCreate) -> Reminder:
@@ -14,7 +16,7 @@ def create_reminder(db: Session, user_id: str, data: ReminderCreate) -> Reminder
         description=data.description,
         priority=data.priority,
         trigger_type=data.trigger_type,
-        trigger_config=json.dumps(data.trigger_config, ensure_ascii=False),
+        trigger_config=data.trigger_config,
         advance_notice=data.advance_notice,
         repeat_rule=data.repeat_rule,
     )
@@ -26,7 +28,7 @@ def create_reminder(db: Session, user_id: str, data: ReminderCreate) -> Reminder
         event = EventTrigger(
             reminder_id=reminder.id,
             event_type=data.trigger_config["event_type"],
-            config=json.dumps(data.trigger_config.get("event_config", {}), ensure_ascii=False),
+            config=data.trigger_config.get("event_config", {}),
         )
         db.add(event)
         db.commit()
@@ -44,7 +46,7 @@ def update_reminder(db: Session, reminder: Reminder, data: ReminderUpdate) -> Re
     if data.trigger_type is not None:
         reminder.trigger_type = data.trigger_type
     if data.trigger_config is not None:
-        reminder.trigger_config = json.dumps(data.trigger_config, ensure_ascii=False)
+        reminder.trigger_config = data.trigger_config
     if data.advance_notice is not None:
         reminder.advance_notice = data.advance_notice
     if data.repeat_rule is not None:
@@ -65,17 +67,20 @@ def delete_reminder(db: Session, reminder: Reminder):
 
 
 def get_due_reminders(db: Session) -> list[Reminder]:
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     reminders = db.query(Reminder).filter(Reminder.status == "active", Reminder.trigger_type == "scheduled").all()
     due = []
     for r in reminders:
         try:
-            cfg = json.loads(r.trigger_config)
+            cfg = r.trigger_config or {}
             target = datetime.fromisoformat(cfg.get("datetime", ""))
+            if target.tzinfo is None:
+                target = target.replace(tzinfo=timezone.utc)
             advance = timedelta(minutes=r.advance_notice)
             if target - advance <= now:
                 due.append(r)
         except Exception:
+            logger.warning("Failed to parse trigger config for reminder %s", r.id, exc_info=True)
             continue
     return due
 

@@ -18,5 +18,5 @@ class Category(Base):
 
     user = relationship("User", back_populates="categories")
     parent = relationship("Category", remote_side=[id], back_populates="children")
-    children = relationship("Category", back_populates="parent", cascade="all, delete-orphan")
-    reminders = relationship("Reminder", back_populates="category", cascade="all, delete-orphan")
+    children = relationship("Category", back_populates="parent", cascade="all, delete-orphan", lazy="selectin")
+    reminders = relationship("Reminder", back_populates="category")
