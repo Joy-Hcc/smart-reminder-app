@@ -1,0 +1,34 @@
+import os
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+from app.config import get_settings
+
+settings = get_settings()
+
+
+def send_reminder_email(to_email: str, title: str, category: str, description: str | None, priority: str) -> tuple[bool, str]:
+    if not settings.sendgrid_api_key:
+        return False, "SendGrid API key not configured"
+
+    sg = SendGridAPIClient(settings.sendgrid_api_key)
+    content = f"""【智能提醒】{category} - {title}
+
+时间：{__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}
+优先级：{priority}
+
+{description or ''}
+
+---
+此邮件由智能提醒App自动发送
+"""
+    message = Mail(
+        from_email=settings.sendgrid_from_email,
+        to_emails=to_email,
+        subject=f"【智能提醒】{category} - {title}",
+        plain_text_content=content,
+    )
+    try:
+        response = sg.send(message)
+        return response.status_code in (200, 202), f"status_{response.status_code}"
+    except Exception as e:
+        return False, str(e)
