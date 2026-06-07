@@ -60,7 +60,7 @@ class _ReminderFormScreenState extends ConsumerState<ReminderFormScreen> {
     setState(() => _scheduledTime = DateTime(d.year, d.month, d.day, t.hour, t.minute));
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (_titleCtrl.text.isEmpty || (_triggerType == 'scheduled' && _scheduledTime == null)) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请填写完整信息')));
       return;
@@ -80,11 +80,19 @@ class _ReminderFormScreenState extends ConsumerState<ReminderFormScreen> {
       createdAt: _isEdit ? widget.reminder!.createdAt : DateTime.now(),
     );
 
-    final notifier = ref.read(reminderProvider.notifier);
-    final future = _isEdit ? notifier.update(widget.reminder!.id, r) : notifier.add(r);
-    future.then((_) {
+    try {
+      final notifier = ref.read(reminderProvider.notifier);
+      if (_isEdit) {
+        await notifier.update(widget.reminder!.id, r);
+      } else {
+        await notifier.add(r);
+      }
       if (mounted) Navigator.pop(context);
-    });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('保存失败: $e')));
+      }
+    }
   }
 
   @override

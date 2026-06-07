@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../services/api_service.dart';
-import '../models/history.dart';
+import '../providers/history_provider.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
   const HistoryScreen({super.key});
@@ -12,26 +11,20 @@ class HistoryScreen extends ConsumerStatefulWidget {
 }
 
 class _HistoryScreenState extends ConsumerState<HistoryScreen> {
-  Future<List<ReminderHistory>>? _future;
-
   @override
   void initState() {
     super.initState();
-    _future = ApiService().fetchHistory();
+    Future.microtask(() => ref.read(historyProvider.notifier).load());
   }
 
   @override
   Widget build(BuildContext context) {
+    final historyAsync = ref.watch(historyProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('历史记录')),
-      body: FutureBuilder(
-        future: _future,
-        builder: (ctx, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError) return Center(child: Text('错误: ${snap.error}'));
-          final list = snap.data ?? [];
+      body: historyAsync.when(
+        data: (list) {
           if (list.isEmpty) return const Center(child: Text('暂无记录'));
           return ListView.builder(
             itemCount: list.length,
@@ -45,6 +38,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             },
           );
         },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('错误: $e')),
       ),
     );
   }

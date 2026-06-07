@@ -5,10 +5,10 @@ from sendgrid.helpers.mail import Mail
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 
 def send_reminder_email(to_email: str, title: str, category: str, description: str | None, priority: str) -> tuple[bool, str]:
+    settings = get_settings()
     if not settings.sendgrid_api_key:
         return False, "SendGrid API key not configured"
 

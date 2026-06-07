@@ -77,8 +77,7 @@ def pause_reminder(reminder_id: str, user=Depends(get_current_user), db: Session
     r = db.query(Reminder).filter(Reminder.id == reminder_id, Reminder.user_id == user.id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Reminder not found")
-    r.status = "paused"
-    db.commit()
+    reminder_service.pause_reminder(db, r)
     return {"ok": True}
 
 
@@ -87,6 +86,5 @@ def resume_reminder(reminder_id: str, user=Depends(get_current_user), db: Sessio
     r = db.query(Reminder).filter(Reminder.id == reminder_id, Reminder.user_id == user.id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Reminder not found")
-    r.status = "active"
-    db.commit()
+    reminder_service.resume_reminder(db, r)
     return {"ok": True}

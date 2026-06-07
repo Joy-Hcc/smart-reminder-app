@@ -32,15 +32,19 @@ async def lifespan(app: FastAPI):
     shutdown_scheduler()
 
 
+settings = get_settings()
+
 app = FastAPI(title="SmartReminder API", version="1.0.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, lambda request, exc: JSONResponse(
     status_code=429, content={"detail": "Rate limit exceeded"}
 ))
 
+# CORS 配置：生产环境使用配置的来源，开发环境允许所有
+cors_origins = [origin.strip() for origin in settings.cors_origins.split(",")]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

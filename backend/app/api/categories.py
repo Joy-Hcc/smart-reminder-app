@@ -35,14 +35,23 @@ def update_category(cat_id: str, data: CategoryUpdate, user=Depends(get_current_
     return cat
 
 
+def _get_all_children_ids(cat: Category) -> list[str]:
+    """递归获取所有子分类 ID"""
+    ids = [cat.id]
+    for child in cat.children:
+        ids.extend(_get_all_children_ids(child))
+    return ids
+
+
 @router.delete("/{cat_id}")
 def delete_category(cat_id: str, user=Depends(get_current_user), db: Session = Depends(get_db)):
     cat = db.query(Category).filter(Category.id == cat_id, Category.user_id == user.id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
-    # Unlink reminders before deleting category
+    # Unlink reminders before deleting category (包括子分类的提醒)
     from app.models.reminder import Reminder
-    db.query(Reminder).filter(Reminder.category_id == cat_id).update({Reminder.category_id: None})
+    all_ids = _get_all_children_ids(cat)
+    db.query(Reminder).filter(Reminder.category_id.in_(all_ids)).update({Reminder.category_id: None}, synchronize_session=False)
     db.delete(cat)
     db.commit()
     return {"ok": True}

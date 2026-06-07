@@ -42,7 +42,7 @@ class ReminderCard extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: pc.withAlpha(40),
+          backgroundColor: pc.withAlpha(60),
           child: Icon(Icons.alarm, color: pc),
         ),
         title: Text(reminder.title, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -57,15 +57,21 @@ class ReminderCard extends ConsumerWidget {
         ),
         trailing: PopupMenuButton<String>(
           onSelected: (v) async {
-            if (v == 'edit') {
-              Navigator.push(context, MaterialPageRoute(
-                builder: (_) => ReminderFormScreen(reminder: reminder),
-              ));
-            }
-            if (v == 'pause') await ref.read(reminderProvider.notifier).pause(reminder.id);
-            if (v == 'resume') await ref.read(reminderProvider.notifier).resume(reminder.id);
-            if (v == 'delete' && await _confirmDelete(context)) {
-              await ref.read(reminderProvider.notifier).delete(reminder.id);
+            try {
+              if (v == 'edit') {
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => ReminderFormScreen(reminder: reminder),
+                ));
+              }
+              if (v == 'pause') await ref.read(reminderProvider.notifier).pause(reminder.id);
+              if (v == 'resume') await ref.read(reminderProvider.notifier).resume(reminder.id);
+              if (v == 'delete' && await _confirmDelete(context)) {
+                await ref.read(reminderProvider.notifier).delete(reminder.id);
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败: $e')));
+              }
             }
           },
           itemBuilder: (_) => [

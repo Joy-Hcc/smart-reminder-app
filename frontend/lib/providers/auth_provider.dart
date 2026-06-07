@@ -33,9 +33,9 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     }
   }
 
-  /// Clear cached user (logout).
+  /// Clear cached user and token (logout).
   Future<void> logout() async {
+    await ApiService().logout();
     state = const AsyncValue.data(null);
-    await ApiService().updateBaseUrl(''); // reset to default if needed
   }
 }

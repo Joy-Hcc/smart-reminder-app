@@ -56,9 +56,12 @@ class ApiService {
     _storage.setBaseUrl(newUrl);
   }
 
-  void setDeviceHeader() async {
-    final id = await getDeviceId();
-    _dio.options.headers['x-device-id'] = id;
+  /// Set Authorization header with stored token.
+  void _setAuthHeader() {
+    final token = _storage.token;
+    if (token != null && token.isNotEmpty) {
+      _dio.options.headers['Authorization'] = 'Bearer $token';
+    }
   }
 
   /// Verify authentication and cache user info for offline use.
@@ -69,11 +72,19 @@ class ApiService {
       'api_key': apiKey,
       'api_provider': provider,
     });
-    await setDeviceHeader();
-    final user = User.fromJson(res.data);
+
+    // 新的响应格式：{user: {...}, token: "..."}
+    final userData = res.data['user'];
+    final token = res.data['token'];
+
+    // 保存 token
+    await _storage.setToken(token);
+    _setAuthHeader();
+
+    final user = User.fromJson(userData);
 
     // Persist user + credentials for offline mode
-    await _storage.setUserJson(jsonEncode(res.data));
+    await _storage.setUserJson(jsonEncode(userData));
     if (apiKey != null) await _storage.setApiKey(apiKey);
     if (provider != null) await _storage.setApiProvider(provider);
 
@@ -91,23 +102,36 @@ class ApiService {
     }
   }
 
+  /// Logout and clear token.
+  Future<void> logout() async {
+    try {
+      _setAuthHeader();
+      await _dio.post('/api/auth/logout');
+    } catch (_) {
+      // 忽略登出错误
+    }
+    await _storage.clearToken();
+    await _storage.setUserJson('');
+    _dio.options.headers.remove('Authorization');
+  }
+
   String? get cachedApiKey => _storage.apiKey;
   String? get cachedProvider => _storage.apiProvider;
 
   Future<List<Category>> fetchCategories() async {
-    await setDeviceHeader();
+    _setAuthHeader();
     final res = await _dio.get('/api/categories');
     return (res.data as List).map((e) => Category.fromJson(e)).toList();
   }
 
   Future<Category> createCategory(Category cat) async {
-    await setDeviceHeader();
+    _setAuthHeader();
     final res = await _dio.post('/api/categories', data: cat.toJson());
     return Category.fromJson(res.data);
   }
 
   Future<List<Reminder>> fetchReminders({String? categoryId, String? status, String? search, int page = 1, int pageSize = 20}) async {
-    await setDeviceHeader();
+    _setAuthHeader();
     final res = await _dio.get('/api/reminders', queryParameters: {
       if (categoryId != null) 'category_id': categoryId,
       if (status != null) 'status': status,
@@ -119,34 +143,34 @@ class ApiService {
   }
 
   Future<Reminder> createReminder(Reminder reminder) async {
-    await setDeviceHeader();
+    _setAuthHeader();
     final res = await _dio.post('/api/reminders', data: reminder.toJson());
     return Reminder.fromJson(res.data);
   }
 
   Future<Reminder> updateReminder(String id, Reminder reminder) async {
-    await setDeviceHeader();
+    _setAuthHeader();
     final res = await _dio.put('/api/reminders/$id', data: reminder.toJson());
     return Reminder.fromJson(res.data);
   }
 
   Future<void> deleteReminder(String id) async {
-    await setDeviceHeader();
+    _setAuthHeader();
     await _dio.delete('/api/reminders/$id');
   }
 
   Future<void> pauseReminder(String id) async {
-    await setDeviceHeader();
+    _setAuthHeader();
     await _dio.post('/api/reminders/$id/pause');
   }
 
   Future<void> resumeReminder(String id) async {
-    await setDeviceHeader();
+    _setAuthHeader();
     await _dio.post('/api/reminders/$id/resume');
   }
 
   Future<List<ReminderHistory>> fetchHistory({String? reminderId, int page = 1, int pageSize = 50}) async {
-    await setDeviceHeader();
+    _setAuthHeader();
     final res = await _dio.get('/api/history', queryParameters: {
       if (reminderId != null) 'reminder_id': reminderId,
       'page': page,

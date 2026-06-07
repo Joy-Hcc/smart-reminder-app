@@ -66,22 +66,68 @@ def delete_reminder(db: Session, reminder: Reminder):
     db.commit()
 
 
+def pause_reminder(db: Session, reminder: Reminder) -> Reminder:
+    reminder.status = "paused"
+    db.commit()
+    db.refresh(reminder)
+    return reminder
+
+
+def resume_reminder(db: Session, reminder: Reminder) -> Reminder:
+    reminder.status = "active"
+    db.commit()
+    db.refresh(reminder)
+    return reminder
+
+
 def get_due_reminders(db: Session) -> list[Reminder]:
     now = datetime.now(timezone.utc)
-    reminders = db.query(Reminder).filter(Reminder.status == "active", Reminder.trigger_type == "scheduled").all()
+    # 分批处理，避免一次性加载所有提醒到内存
+    batch_size = 100
+    offset = 0
     due = []
-    for r in reminders:
-        try:
-            cfg = r.trigger_config or {}
-            target = datetime.fromisoformat(cfg.get("datetime", ""))
-            if target.tzinfo is None:
-                target = target.replace(tzinfo=timezone.utc)
-            advance = timedelta(minutes=r.advance_notice)
-            if target - advance <= now:
-                due.append(r)
-        except Exception:
-            logger.warning("Failed to parse trigger config for reminder %s", r.id, exc_info=True)
-            continue
+
+    while True:
+        reminders = db.query(Reminder).filter(
+            Reminder.status == "active",
+            Reminder.trigger_type == "scheduled"
+        ).offset(offset).limit(batch_size).all()
+
+        if not reminders:
+            break
+
+        # 预查询已触发的非重复提醒 ID（避免 N+1 查询）
+        non_repeat_ids = [r.id for r in reminders if not r.repeat_rule]
+        triggered_ids: set[str] = set()
+        if non_repeat_ids:
+            triggered_ids = {
+                row[0] for row in db.query(ReminderHistory.reminder_id)
+                .filter(
+                    ReminderHistory.reminder_id.in_(non_repeat_ids),
+                    ReminderHistory.trigger_type == "scheduled"
+                ).distinct().all()
+            }
+
+        for r in reminders:
+            try:
+                cfg = r.trigger_config or {}
+                target = datetime.fromisoformat(cfg.get("datetime", ""))
+                if target.tzinfo is None:
+                    target = target.replace(tzinfo=timezone.utc)
+                advance = timedelta(minutes=r.advance_notice)
+
+                # 跳过已触发的非重复提醒
+                if not r.repeat_rule and r.id in triggered_ids:
+                    continue
+
+                if target - advance <= now:
+                    due.append(r)
+            except Exception:
+                logger.warning("Failed to parse trigger config for reminder %s", r.id, exc_info=True)
+                continue
+
+        offset += batch_size
+
     return due
 
 
